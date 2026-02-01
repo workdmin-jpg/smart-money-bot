@@ -4,12 +4,7 @@ from datetime import datetime
 from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
 from core.market_scanner import get_watchlist
-
-from core.market_context import (
-    get_news_score,
-    get_coinmarketcap_score,
-    get_whales_score,
-)
+from core.market_context import analyze_market_context
 
 from exchanges.binance_futures import (
     get_binance_futures_klines_5m,
@@ -93,31 +88,7 @@ def calculate_signal_score(signal):
     return min(score, 100)
 
 # ==============================
-# MARKET CONTEXT
-# ==============================
-
-def calculate_market_context(symbol):
-    news = max(get_news_score(symbol, 3), 0)
-    cmc = max(get_coinmarketcap_score(symbol, 3), 0)
-    whales = max(get_whales_score(symbol, 3), 0)
-
-    total = news + cmc + whales
-
-    status = (
-        "STRONG_MARKET_INTEREST" if total >= 70 else
-        "MODERATE_MARKET_INTEREST" if total >= 40 else
-        "WEAK_MARKET_INTEREST" if total > 0 else
-        "NO_CONTEXT_SIGNAL"
-    )
-
-    return {
-        "score": total,
-        "status": status,
-        "details": {"news": news, "cmc": cmc, "whales": whales},
-    }
-
-# ==============================
-# TRADE TYPE (INFO)
+# TRADE TYPE
 # ==============================
 
 def classify_trade(context_score):
@@ -155,6 +126,7 @@ def run_bot():
             if not all([c5, c15, c30, c1h]):
                 continue
 
+            # SMART MONEY
             signal = smart_money_signal(symbol, c5, c15, c30, c1h)
             if not signal:
                 continue
@@ -163,16 +135,10 @@ def run_bot():
             if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
 
-            context = calculate_market_context(symbol)
-            
-# SAFE MODE
-            if context is None or context.get("score", 0) <= 0:
-               context = {
-                    "score": 0,
-                    "status": "DISABLED",
-                    "details": {}
-             }
-        
+            # MARKET CONTEXT (MANDATORY)
+            context = analyze_market_context(symbol)
+            if context["score"] <= 0:
+                continue
 
             LAST_SIGNAL_SCORE[symbol] = score
             trade_type = classify_trade(context["score"])
@@ -190,9 +156,9 @@ def run_bot():
                 f"🎯 TP3: {signal.get('tp3')} (Liquidity / HTF)\n\n"
                 f"RR: {signal.get('rr')}\n\n"
                 f"📡 CONTEXT: {context['status']} ({context['score']}%)\n"
-                f"📰 {context['details']['news']} | "
-                f"📊 {context['details']['cmc']} | "
-                f"🐋 {context['details']['whales']}\n\n"
+                f"📰 {context['details'].get('news', 0)} | "
+                f"📊 {context['details'].get('cmc', 0)} | "
+                f"🐋 {context['details'].get('whales', 0)}\n\n"
                 f"SCORE: {score}%\n"
                 f"TIME: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
             )
@@ -211,8 +177,4 @@ def run_bot():
 if __name__ == "__main__":
     while True:
         run_bot()
-
         time.sleep(300)
-
-
-
