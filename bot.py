@@ -172,7 +172,7 @@ def run_bot():
                     "status": "DISABLED",
                     "details": {}
              }
-                continue
+        
 
             LAST_SIGNAL_SCORE[symbol] = score
             trade_type = classify_trade(context["score"])
@@ -213,5 +213,6 @@ if __name__ == "__main__":
         run_bot()
 
         time.sleep(300)
+
 
 
