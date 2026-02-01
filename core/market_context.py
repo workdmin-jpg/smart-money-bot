@@ -23,7 +23,9 @@ def analyze_market_context(symbol, days=3):
         status = "WEAK_MARKET_INTEREST"
     else:
         status = "NO_CONTEXT_SIGNAL"
-
+    if response is None:
+        return 0
+        
     return {
         "score": total,
         "status": status,
@@ -32,4 +34,5 @@ def analyze_market_context(symbol, days=3):
             "cmc": cmc,
             "whales": whales
         }
+
     }
