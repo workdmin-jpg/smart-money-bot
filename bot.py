@@ -163,6 +163,17 @@ def run_bot():
             if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
 
+            context = calculate_market_context(symbol)
+            
+# SAFE MODE
+            if context is None or context.get("score", 0) <= 0:
+               context = {
+                    "score": 0,
+                    "status": "DISABLED",
+                    "details": {}
+             }
+                continue
+
             LAST_SIGNAL_SCORE[symbol] = score
             trade_type = classify_trade(context["score"])
 
@@ -202,4 +213,5 @@ if __name__ == "__main__":
         run_bot()
 
         time.sleep(300)
+
 
