@@ -159,12 +159,6 @@ def run_bot():
             if not signal:
                 continue
 
-            context = {
-           "score": 0,
-           "status": "DISABLED",
-           "details": {"news": 0, "cmc": 0, "whales": 0},
-           }
-
             score = calculate_signal_score(signal)
             if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
@@ -208,3 +202,4 @@ if __name__ == "__main__":
         run_bot()
 
         time.sleep(300)
+
