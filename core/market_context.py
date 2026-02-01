@@ -24,11 +24,10 @@ def analyze_market_context(symbol, days=3):
     else:
         status = "NO_CONTEXT_SIGNAL"
         
-    return float(score)
-    
-    if response is None:
-        return 0
-        
+     try:
+        return float(score)
+        except:
+                
     return {
         "score": total,
         "status": status,
@@ -39,4 +38,5 @@ def analyze_market_context(symbol, days=3):
         }
 
     }
+
 
