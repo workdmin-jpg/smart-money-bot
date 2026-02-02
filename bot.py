@@ -136,13 +136,32 @@ def run_bot():
                 continue
 
             # MARKET CONTEXT (MANDATORY)
-            context = analyze_market_context(symbol)
-            if context["score"] <= 0:
-                continue
+            cdef calculate_market_context(symbol):
+    try:
+        news = max(get_news_score(symbol, 3) or 0, 0)
+        cmc = max(get_coinmarketcap_score(symbol, 3) or 0, 0)
+        whales = max(get_whales_score(symbol, 3) or 0, 0)
+    except:
+        news = cmc = whales = 0
 
-            LAST_SIGNAL_SCORE[symbol] = score
-            trade_type = classify_trade(context["score"])
+    total = news + cmc + whales
 
+    status = (
+        "STRONG_MARKET_INTEREST" if total >= 70 else
+        "MODERATE_MARKET_INTEREST" if total >= 40 else
+        "WEAK_MARKET_INTEREST" if total > 0 else
+        "NO_CONTEXT_SIGNAL"
+    )
+
+    return {
+        "score": total,
+        "status": status,
+        "details": {
+            "news": news,
+            "cmc": cmc,
+            "whales": whales
+        },
+    }
             message = (
                 f"🚀 SMART MONEY SIGNAL\n\n"
                 f"PAIR: {symbol}\n"
@@ -178,3 +197,4 @@ if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
+
