@@ -81,23 +81,37 @@ def futures_klines(symbol, tf):
 
 def normalize(raw):
     candles = []
+
     if not isinstance(raw, list):
         return None
 
     for c in raw:
         try:
+            # صيغة list
+            if isinstance(c, (list, tuple)):
+                o, h, l, cl, v = c[1], c[2], c[3], c[4], c[5]
+
+            # صيغة dict
+            elif isinstance(c, dict):
+                o = c.get("open") or c.get("o")
+                h = c.get("high") or c.get("h")
+                l = c.get("low") or c.get("l")
+                cl = c.get("close") or c.get("c")
+                v = c.get("volume") or c.get("v")
+            else:
+                continue
+
             candles.append({
-                "open": safe_float(c[1]),
-                "high": safe_float(c[2]),
-                "low": safe_float(c[3]),
-                "close": safe_float(c[4]),
-                "volume": safe_float(c[5]),
+                "open": safe_float(o),
+                "high": safe_float(h),
+                "low": safe_float(l),
+                "close": safe_float(cl),
+                "volume": safe_float(v),
             })
         except:
             continue
 
-    return candles if len(candles) >= 30 else None
-
+    return candles if len(candles) >= 20 else None
 # ==============================
 # SCORE
 # ==============================
@@ -138,3 +152,4 @@ def run_bot():
 
             c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
             if not all([
+
