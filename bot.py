@@ -149,9 +149,4 @@ def run_bot():
 
            if not r5 or not r15 or not r30 or not r1h:
     continue                                                                
-
-            c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
-            if not all([
-
-
-
+]
