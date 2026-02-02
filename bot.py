@@ -23,7 +23,7 @@ from exchanges.mexc_futures import (
 # SETTINGS
 # ==============================
 
-TEST_MODE = False        # اجعله True فقط للاختبار
+TEST_MODE = True        # اجعله True فقط للاختبار
 MIN_SIGNAL_STEP = 0
 
 # ==============================
@@ -152,4 +152,5 @@ def run_bot():
 
             c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
             if not all([
+
 
