@@ -23,14 +23,15 @@ from exchanges.mexc_futures import (
 # SETTINGS
 # ==============================
 
-TEST_MODE = True          # يسمح بإرسال إشارات تجريبية
-MIN_SIGNAL_STEP = 0       # أثناء الاختبار (نرفعه لاحقًا)
+TEST_MODE = True          # وضع الاختبار
+MIN_SIGNAL_STEP = 0       # لا منع تكرار أثناء الاختبار
 
 # ==============================
-# MEMORY (ANTI DUPLICATION)
+# MEMORY
 # ==============================
 
 LAST_SIGNAL_SCORE = {}
+SENT_ONCE = set()   # يمنع إرسال أكثر من إشارة Test لنفس العملة
 
 # ==============================
 # SAFE HELPERS
@@ -76,7 +77,7 @@ def futures_klines(symbol, tf):
     return None
 
 # ==============================
-# NORMALIZE CANDLES
+# NORMALIZE
 # ==============================
 
 def normalize(raw):
@@ -86,11 +87,15 @@ def normalize(raw):
 
     for c in raw:
         try:
+            close = safe_float(c[4])
+            if close <= 0:
+                continue
+
             candles.append({
                 "open": safe_float(c[1]),
                 "high": safe_float(c[2]),
                 "low": safe_float(c[3]),
-                "close": safe_float(c[4]),
+                "close": close,
                 "volume": safe_float(c[5]),
             })
         except:
@@ -99,7 +104,7 @@ def normalize(raw):
     return candles if len(candles) >= 20 else None
 
 # ==============================
-# SIGNAL SCORE
+# SCORE
 # ==============================
 
 def calculate_signal_score(signal):
@@ -119,6 +124,7 @@ def run_bot():
 
     try:
         watchlist = get_watchlist()
+        print(f"📋 Watchlist loaded: {len(watchlist)} symbols")
     except Exception as e:
         print(f"❌ Watchlist error: {e}")
         return
@@ -137,27 +143,24 @@ def run_bot():
             r1h = futures_klines(symbol, "1h")
 
             if not all([r5, r15, r30, r1h]):
+                print(f"⏭️ {symbol} missing candles")
                 continue
 
             c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
             if not all([c5, c15, c30, c1h]):
+                print(f"⏭️ {symbol} normalize failed")
                 continue
-
-            # ==============================
-            # SMART MONEY SIGNAL
-            # ==============================
 
             signal = smart_money_signal(symbol, c5, c15, c30, c1h)
 
-            # LOG مهم
             if not signal:
                 print(f"ℹ️ No Smart Money signal for {symbol}")
 
             # ==============================
-            # TEST MODE FALLBACK
+            # TEST MODE FORCE SIGNAL
             # ==============================
 
-            if not signal and TEST_MODE:
+            if not signal and TEST_MODE and symbol not in SENT_ONCE:
                 last = c5[-1]["close"]
                 signal = {
                     "direction": "LONG",
@@ -169,19 +172,14 @@ def run_bot():
                     "rr": 2,
                     "model": "TEST_MODE"
                 }
+                SENT_ONCE.add(symbol)
+                print(f"🧪 TEST SIGNAL GENERATED for {symbol}")
 
             if not signal:
                 continue
 
             score = calculate_signal_score(signal)
-            if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
-                continue
-
             LAST_SIGNAL_SCORE[symbol] = score
-
-            # ==============================
-            # SEND TELEGRAM
-            # ==============================
 
             message = (
                 f"🚀 SMART MONEY SIGNAL\n\n"
@@ -201,16 +199,7 @@ def run_bot():
 
             send_telegram_message(message)
             print(f"✅ SIGNAL SENT {symbol}")
-            time.sleep(0.3)
+            time.sleep(0.5)
 
         except Exception as e:
-            print(f"⛔ {symbol} error: {e}")
-
-# ==============================
-# RUN
-# ==============================
-
-if __name__ == "__main__":
-    while True:
-        run_bot()
-        time.sleep(300)
+            print(f"
