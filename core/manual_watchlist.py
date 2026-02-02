@@ -1,1 +1,14 @@
+# core/manual_watchlist.py
 
+def get_watchlist():
+    symbols = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+        "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "LINKUSDT", "DOTUSDT",
+        "OPUSDT", "ARBUSDT", "SUIUSDT", "INJUSDT", "APTUSDT",
+        "SEIUSDT", "NEARUSDT", "ATOMUSDT", "FTMUSDT", "LTCUSDT",
+        "RNDRUSDT", "MATICUSDT", "ALGOUSDT", "GALAUSDT", "IMXUSDT",
+        "PEPEUSDT", "WIFUSDT", "BONKUSDT", "FLOKIUSDT", "ORDIUSDT",
+        "RIVERUSDT","SKRUSDT","MORPHOUSDT","JUPUSDT","UAIUSDT"
+    ]
+
+    return [{"symbol": s, "liquidity": "MANUAL"} for s in symbols]
