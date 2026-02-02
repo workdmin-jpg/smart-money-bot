@@ -1,9 +1,10 @@
 import time
-from datetime import datetime
 
+from datetime import datetime
+from core.manual_watchlist import get_watchlist
 from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
-from core.market_scanner import get_watchlist
+
 
 from core.market_context import (
     get_news_score,
@@ -223,3 +224,4 @@ if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
+
