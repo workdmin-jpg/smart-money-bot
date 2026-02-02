@@ -1,11 +1,9 @@
 # config/manual_pairs.py
-# ===============================
-# MANUAL PAIRS (USER CONTROLLED)
-# ===============================
-
 MANUAL_PAIRS = [
-    "BTCUSDT",
-    "ETHUSDT",
-    "SOLUSDT",
-    # أضف ما تريد
+    "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
+    "ADAUSDT","DOGEUSDT","MATICUSDT","LINKUSDT","LTCUSDT",
+    "DOTUSDT","AVAXUSDT","UNIUSDT","BCHUSDT","TRXUSDT",
+    "ALGOUSDT","ATOMUSDT","XLMUSDT","NEARUSDT","VETUSDT",
+    "APEUSDT","FILUSDT","SANDUSDT","MANAUSDT","ICPUSDT",
+    "EOSUSDT","AAVEUSDT","THETAUSDT","PEPEUSDT"
 ]
