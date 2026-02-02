@@ -1,16 +1,29 @@
-def near_signal(candles):
-    if len(candles) < 20:
-        return False
+def get_watchlist():
+    markets = []
+    added = set()
 
-    highs = [c[1] for c in candles[-20:]]
-    lows = [c[2] for c in candles[-20:]]
+    # ===============================
+    # 1️⃣ MANUAL PAIRS FIRST
+    # ===============================
+    for symbol in MANUAL_PAIRS:
+        if symbol not in added:
+            markets.append({
+                "symbol": symbol,
+                "liquidity": "MANUAL"
+            })
+            added.add(symbol)
 
-    last_close = candles[-1][3]
+    # ===============================
+    # 2️⃣ MARKET SCAN (REST)
+    # ===============================
+    try:
+        market_data = fetch_markets_from_source()  # دالتك الحالية
+        for m in market_data:
+            symbol = m.get("symbol")
+            if symbol and symbol not in added:
+                markets.append(m)
+                added.add(symbol)
+    except Exception as e:
+        print(f"⚠️ Market source failed: {e}")
 
-    if last_close > max(highs[:-1]) * 0.995:
-        return "BUY"
-
-    if last_close < min(lows[:-1]) * 1.005:
-        return "SELL"
-
-    return False
+    return markets
