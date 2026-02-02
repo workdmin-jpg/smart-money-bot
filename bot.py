@@ -64,16 +64,23 @@ def futures_klines(symbol, tf):
 # ==============================
 
 def normalize(raw):
-    try:
-        return [{
-            "open": float(c[1]),
-            "high": float(c[2]),
-            "low": float(c[3]),
-            "close": float(c[4]),
-            "volume": float(c[5]),
-        } for c in raw]
-    except Exception:
+    if not raw:
         return None
+
+    candles = []
+    for c in raw:
+        try:
+            candles.append({
+                "open": float(c[1]),
+                "high": float(c[2]),
+                "low": float(c[3]),
+                "close": float(c[4]),
+                "volume": float(c[5] or 0),
+            })
+        except:
+            continue
+
+    return candles if len(candles) > 20 else None
 
 # ==============================
 # SIGNAL SCORE
@@ -175,3 +182,4 @@ if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
+
