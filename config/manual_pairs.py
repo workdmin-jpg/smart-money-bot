@@ -1,10 +1,35 @@
-# config/manual_pairs.py
-MANUAL_PAIRS = [
-    "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
-    "ADAUSDT","DOGEUSDT","MATICUSDT","LINKUSDT","LTCUSDT",
-    "DOTUSDT","AVAXUSDT","UNIUSDT","BCHUSDT","TRXUSDT",
-    "ALGOUSDT","ATOMUSDT","XLMUSDT","NEARUSDT","VETUSDT",
-    "APEUSDT","FILUSDT","SANDUSDT","MANAUSDT","ICPUSDT",
-    "EOSUSDT","AAVEUSDT","THETAUSDT","PEPEUSDT","RIVERUSDT",
-    "SKRUSDT","MORPHOUSDT","JUPUSDT","UAIUSDT"
-]
+def get_watchlist():
+    symbols = [
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT",
+        "SOLUSDT",
+        "XRPUSDT",
+        "ADAUSDT",
+        "AVAXUSDT",
+        "DOGEUSDT",
+        "LINKUSDT",
+        "DOTUSDT",
+        "OPUSDT",
+        "ARBUSDT",
+        "SUIUSDT",
+        "INJUSDT",
+        "APTUSDT",
+        "SEIUSDT",
+        "NEARUSDT",
+        "ATOMUSDT",
+        "FTMUSDT",
+        "LTCUSDT",
+        "RNDRUSDT",
+        "MATICUSDT",
+        "ALGOUSDT",
+        "GALAUSDT",
+        "IMXUSDT",
+        "PEPEUSDT",
+        "WIFUSDT",
+        "BONKUSDT",
+        "FLOKIUSDT",
+        "ORDIUSDT",
+    ]
+
+    return [{"symbol": s, "liquidity": "MANUAL"} for s in symbols]
