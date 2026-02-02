@@ -4,7 +4,12 @@ from datetime import datetime
 from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
 from core.market_scanner import get_watchlist
-from core.market_context import calculate_market_context
+
+from core.market_context import (
+    get_news_score,
+    get_coinmarketcap_score,
+    get_whales_score,
+)
 
 from exchanges.binance_futures import (
     get_binance_futures_klines_5m,
@@ -21,16 +26,23 @@ from exchanges.mexc_futures import (
 )
 
 # ==============================
-# MEMORY (ANTI DUPLICATION)
+# MEMORY
 # ==============================
-
 LAST_SIGNAL_SCORE = {}
 MIN_SIGNAL_STEP = 10
 
 # ==============================
+# SAFE FLOAT
+# ==============================
+def safe_float(value):
+    try:
+        return float(value)
+    except:
+        return 0.0
+
+# ==============================
 # FUTURES FALLBACK
 # ==============================
-
 def futures_klines(symbol, tf):
     try:
         if tf == "5m":
@@ -44,7 +56,7 @@ def futures_klines(symbol, tf):
 
         if data and len(data) > 20:
             return data
-    except Exception:
+    except:
         pass
 
     try:
@@ -56,36 +68,27 @@ def futures_klines(symbol, tf):
             return get_mexc_futures_klines_30m(symbol)
         else:
             return get_mexc_futures_klines_1h(symbol)
-    except Exception:
+    except:
         return None
 
 # ==============================
 # NORMALIZE
 # ==============================
-
 def normalize(raw):
-    if not raw:
+    try:
+        return [{
+            "open": float(c[1]),
+            "high": float(c[2]),
+            "low": float(c[3]),
+            "close": float(c[4]),
+            "volume": float(c[5]),
+        } for c in raw if c and len(c) >= 6]
+    except:
         return None
-
-    candles = []
-    for c in raw:
-        try:
-            candles.append({
-                "open": float(c[1]),
-                "high": float(c[2]),
-                "low": float(c[3]),
-                "close": float(c[4]),
-                "volume": float(c[5] or 0),
-            })
-        except:
-            continue
-
-    return candles if len(candles) > 20 else None
 
 # ==============================
 # SIGNAL SCORE
 # ==============================
-
 def calculate_signal_score(signal):
     score = 50
     if signal.get("rr"):
@@ -95,23 +98,52 @@ def calculate_signal_score(signal):
     return min(score, 100)
 
 # ==============================
+# MARKET CONTEXT (SAFE)
+# ==============================
+def calculate_market_context(symbol):
+    try:
+        news = safe_float(get_news_score(symbol, 3))
+        cmc = safe_float(get_coinmarketcap_score(symbol, 3))
+        whales = safe_float(get_whales_score(symbol, 3))
+    except Exception as e:
+        print(f"⚠️ Market source failed: {e}")
+        return None
+
+    total = news + cmc + whales
+
+    status = (
+        "STRONG_MARKET_INTEREST" if total >= 70 else
+        "MODERATE_MARKET_INTEREST" if total >= 40 else
+        "WEAK_MARKET_INTEREST" if total > 0 else
+        "NO_CONTEXT_SIGNAL"
+    )
+
+    return {
+        "score": total,
+        "status": status,
+        "details": {
+            "news": news,
+            "cmc": cmc,
+            "whales": whales,
+        },
+    }
+
+# ==============================
 # TRADE TYPE
 # ==============================
-
-def classify_trade(context_score):
-    if context_score >= 70:
+def classify_trade(score):
+    if score >= 70:
         return "SWING / POSITION"
-    elif context_score >= 40:
+    elif score >= 40:
         return "INTRADAY"
     return "SCALP"
 
 # ==============================
 # MAIN LOOP
 # ==============================
-
 def run_bot():
     print("🔄 Scanning market...")
-    watchlist = get_watchlist() or []
+    watchlist = get_watchlist()
 
     for market in watchlist:
         symbol = market.get("symbol")
@@ -138,10 +170,11 @@ def run_bot():
                 continue
 
             context = calculate_market_context(symbol)
+            if not context or context["score"] <= 0:
+                continue
 
             score = calculate_signal_score(signal)
-            last = LAST_SIGNAL_SCORE.get(symbol, 0)
-            if score < last + MIN_SIGNAL_STEP:
+            if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
 
             LAST_SIGNAL_SCORE[symbol] = score
@@ -160,9 +193,6 @@ def run_bot():
                 f"🎯 TP3: {signal.get('tp3')}\n\n"
                 f"RR: {signal.get('rr')}\n\n"
                 f"📡 CONTEXT: {context['status']} ({context['score']}%)\n"
-                f"📰 {context['details'].get('news',0)} | "
-                f"📊 {context['details'].get('cmc',0)} | "
-                f"🐋 {context['details'].get('whales',0)}\n\n"
                 f"SCORE: {score}%\n"
                 f"TIME: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
             )
@@ -177,9 +207,7 @@ def run_bot():
 # ==============================
 # RUN
 # ==============================
-
 if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
-
