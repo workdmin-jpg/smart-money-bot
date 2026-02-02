@@ -30,6 +30,11 @@ def get_watchlist():
         "BONKUSDT",
         "FLOKIUSDT",
         "ORDIUSDT",
+        "RIVERUSDT",
+        "SKRUSDT",
+        "MORPHOUSDT",
+        "JUPUSDT",
+        "UAIUSDT"
     ]
 
     return [{"symbol": s, "liquidity": "MANUAL"} for s in symbols]
