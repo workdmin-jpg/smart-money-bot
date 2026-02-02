@@ -5,13 +5,6 @@ from core.manual_watchlist import get_watchlist
 from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
 
-from exchanges.binance_futures import (
-    get_binance_futures_klines_5m,
-    get_binance_futures_klines_15m,
-    get_binance_futures_klines_30m,
-    get_binance_futures_klines_1h,
-)
-
 from exchanges.mexc_futures import (
     get_mexc_futures_klines_5m,
     get_mexc_futures_klines_15m,
@@ -23,8 +16,8 @@ from exchanges.mexc_futures import (
 # SETTINGS
 # ==============================
 
-TEST_MODE = True          # True للاختبار فقط
-MIN_SIGNAL_STEP = 0       # 0 أثناء الاختبار
+TEST_MODE = True        # True للاختبار فقط
+MIN_SIGNAL_STEP = 0
 
 # ==============================
 # MEMORY
@@ -43,24 +36,22 @@ def safe_float(v):
         return 0.0
 
 # ==============================
-# FUTURES FETCH
+# FUTURES FETCH (MEXC ONLY)
 # ==============================
 
 def futures_klines(symbol, tf):
-    fetchers = {
-        "5m": (get_binance_futures_klines_5m, get_mexc_futures_klines_5m),
-        "15m": (get_binance_futures_klines_15m, get_mexc_futures_klines_15m),
-        "30m": (get_binance_futures_klines_30m, get_mexc_futures_klines_30m),
-        "1h": (get_binance_futures_klines_1h, get_mexc_futures_klines_1h),
-    }
-
-    for fetch in fetchers.get(tf, []):
-        try:
-            data = fetch(symbol)
-            if isinstance(data, list) and len(data) >= 50:
-                return data
-        except Exception as e:
-            print(f"⚠️ Fetch failed {symbol} {tf}: {e}")
+    try:
+        mexc = {
+            "5m": get_mexc_futures_klines_5m,
+            "15m": get_mexc_futures_klines_15m,
+            "30m": get_mexc_futures_klines_30m,
+            "1h": get_mexc_futures_klines_1h,
+        }
+        data = mexc[tf](symbol)
+        if isinstance(data, list) and len(data) >= 50:
+            return data
+    except Exception as e:
+        print(f"⚠️ MEXC failed {symbol} {tf}: {e}")
 
     return None
 
@@ -76,7 +67,7 @@ def normalize(raw):
 
     for c in raw:
         try:
-            if isinstance(c, (list, tuple)) and len(c) >= 6:
+            if isinstance(c, (list, tuple)):
                 o, h, l, cl, v = c[1], c[2], c[3], c[4], c[5]
             elif isinstance(c, dict):
                 o = c.get("open") or c.get("o")
@@ -122,7 +113,6 @@ def run_bot():
     print(f"📋 WATCHLIST SIZE: {len(watchlist) if watchlist else 0}")
 
     if not watchlist:
-        print("❌ Watchlist empty")
         return
 
     for market in watchlist:
@@ -147,7 +137,7 @@ def run_bot():
             c30 = normalize(r30)
             c1h = normalize(r1h)
 
-            if not (c5 and c15 and c30 and c1h):
+            if not all([c5, c15, c30, c1h]):
                 print(f"⛔ Normalize failed {symbol}")
                 continue
 
