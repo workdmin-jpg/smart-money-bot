@@ -147,10 +147,11 @@ def run_bot():
             r30 = futures_klines(symbol, "30m")
             r1h = futures_klines(symbol, "1h")
 
-            if not all([r5, r15, r30, r1h]):
-                continue
+           if not r5 or not r15 or not r30 or not r1h:
+    continue                                                                
 
             c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
             if not all([
+
 
 
