@@ -1,5 +1,6 @@
 # core/market_scanner.py
 
+from config.manual_pairs import MANUAL_PAIRS
 from exchanges.binance import get_binance_spot_usdt
 from exchanges.okx import get_okx_spot_usdt
 from exchanges.bybit import get_bybit_spot_usdt
@@ -112,4 +113,5 @@ if __name__ == "__main__":
     wl = get_watchlist()
     print(f"TOTAL MARKETS: {len(wl)}")
     for m in wl[:10]:
+
         print(m)
