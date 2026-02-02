@@ -1,10 +1,9 @@
 import time
-
 from datetime import datetime
+
 from core.manual_watchlist import get_watchlist
 from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
-
 
 from exchanges.binance_futures import (
     get_binance_futures_klines_5m,
@@ -21,19 +20,25 @@ from exchanges.mexc_futures import (
 )
 
 # ==============================
+# SETTINGS
+# ==============================
+
+TEST_MODE = True          # يسمح بإرسال إشارات تجريبية
+MIN_SIGNAL_STEP = 0       # أثناء الاختبار (نرفعه لاحقًا)
+
+# ==============================
 # MEMORY (ANTI DUPLICATION)
 # ==============================
 
 LAST_SIGNAL_SCORE = {}
-MIN_SIGNAL_STEP = 10
 
 # ==============================
 # SAFE HELPERS
 # ==============================
 
-def safe_float(value):
+def safe_float(v):
     try:
-        return float(value)
+        return float(v)
     except:
         return 0.0
 
@@ -43,26 +48,26 @@ def safe_float(value):
 
 def futures_klines(symbol, tf):
     try:
-        fetchers = {
+        binance = {
             "5m": get_binance_futures_klines_5m,
             "15m": get_binance_futures_klines_15m,
             "30m": get_binance_futures_klines_30m,
             "1h": get_binance_futures_klines_1h,
         }
-        data = fetchers[tf](symbol)
+        data = binance[tf](symbol)
         if isinstance(data, list) and len(data) > 20:
             return data
     except:
         pass
 
     try:
-        fetchers = {
+        mexc = {
             "5m": get_mexc_futures_klines_5m,
             "15m": get_mexc_futures_klines_15m,
             "30m": get_mexc_futures_klines_30m,
             "1h": get_mexc_futures_klines_1h,
         }
-        data = fetchers[tf](symbol)
+        data = mexc[tf](symbol)
         if isinstance(data, list) and len(data) > 20:
             return data
     except:
@@ -71,7 +76,7 @@ def futures_klines(symbol, tf):
     return None
 
 # ==============================
-# SAFE NORMALIZE
+# NORMALIZE CANDLES
 # ==============================
 
 def normalize(raw):
@@ -106,44 +111,6 @@ def calculate_signal_score(signal):
     return min(score, 100)
 
 # ==============================
-# MARKET CONTEXT (ULTRA SAFE)
-# ==============================
-
-def calculate_market_context(symbol):
-    try:
-        news = safe_float(get_news_score(symbol, 3))
-        cmc = safe_float(get_coinmarketcap_score(symbol, 3))
-        whales = safe_float(get_whales_score(symbol, 3))
-    except:
-        return {"score": 0, "status": "DISABLED", "details": {}}
-
-    total = news + cmc + whales
-
-    status = (
-        "STRONG_MARKET_INTEREST" if total >= 70 else
-        "MODERATE_MARKET_INTEREST" if total >= 40 else
-        "WEAK_MARKET_INTEREST" if total > 0 else
-        "NO_CONTEXT_SIGNAL"
-    )
-
-    return {
-        "score": total,
-        "status": status,
-        "details": {"news": news, "cmc": cmc, "whales": whales},
-    }
-
-# ==============================
-# TRADE TYPE
-# ==============================
-
-def classify_trade(score):
-    if score >= 70:
-        return "SWING / POSITION"
-    elif score >= 40:
-        return "INTRADAY"
-    return "SCALP"
-
-# ==============================
 # MAIN LOOP
 # ==============================
 
@@ -153,12 +120,13 @@ def run_bot():
     try:
         watchlist = get_watchlist()
     except Exception as e:
-        print(f"❌ Watchlist failed: {e}")
+        print(f"❌ Watchlist error: {e}")
         return
 
     for market in watchlist:
         symbol = market.get("symbol")
-        source = market.get("liquidity", "MARKET")
+        source = market.get("liquidity", "MANUAL")
+
         if not symbol:
             continue
 
@@ -175,7 +143,33 @@ def run_bot():
             if not all([c5, c15, c30, c1h]):
                 continue
 
+            # ==============================
+            # SMART MONEY SIGNAL
+            # ==============================
+
             signal = smart_money_signal(symbol, c5, c15, c30, c1h)
+
+            # LOG مهم
+            if not signal:
+                print(f"ℹ️ No Smart Money signal for {symbol}")
+
+            # ==============================
+            # TEST MODE FALLBACK
+            # ==============================
+
+            if not signal and TEST_MODE:
+                last = c5[-1]["close"]
+                signal = {
+                    "direction": "LONG",
+                    "entry": last,
+                    "stop": last * 0.99,
+                    "tp1": last * 1.01,
+                    "tp2": last * 1.02,
+                    "tp3": last * 1.03,
+                    "rr": 2,
+                    "model": "TEST_MODE"
+                }
+
             if not signal:
                 continue
 
@@ -183,23 +177,25 @@ def run_bot():
             if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
 
-            context = calculate_market_context(symbol)
             LAST_SIGNAL_SCORE[symbol] = score
-            trade_type = classify_trade(context["score"])
+
+            # ==============================
+            # SEND TELEGRAM
+            # ==============================
 
             message = (
                 f"🚀 SMART MONEY SIGNAL\n\n"
                 f"PAIR: {symbol}\n"
                 f"SOURCE: {source}\n"
-                f"DIRECTION: {signal['direction']}\n"
-                f"TYPE: {trade_type}\n\n"
+                f"DIRECTION: {signal['direction']}\n\n"
                 f"📍 ENTRY: {signal['entry']}\n"
                 f"🛑 SL: {signal['stop']}\n\n"
-                f"🎯 TP1: {signal.get('tp1')}\n"
-                f"🎯 TP2: {signal.get('tp2')}\n"
-                f"🎯 TP3: {signal.get('tp3')}\n\n"
-                f"RR: {signal.get('rr')}\n\n"
-                f"📡 CONTEXT: {context['status']} ({context['score']}%)\n\n"
+                f"🎯 TP1: {signal['tp1']}\n"
+                f"🎯 TP2: {signal['tp2']}\n"
+                f"🎯 TP3: {signal['tp3']}\n\n"
+                f"RR: {signal.get('rr')}\n"
+                f"MODEL: {signal.get('model')}\n\n"
+                f"SCORE: {score}%\n"
                 f"TIME: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
             )
 
@@ -218,6 +214,3 @@ if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
-
-
-
