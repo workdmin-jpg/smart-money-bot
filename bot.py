@@ -33,39 +33,45 @@ LAST_SIGNAL_SCORE = {}
 MIN_SIGNAL_STEP = 10
 
 # ==============================
+# SAFE HELPERS
+# ==============================
+
+def safe_float(value):
+    try:
+        return float(value)
+    except:
+        return 0.0
+
+# ==============================
 # SAFE FUTURES FETCH
 # ==============================
 
 def futures_klines(symbol, tf):
     try:
-        if tf == "5m":
-            data = get_binance_futures_klines_5m(symbol)
-        elif tf == "15m":
-            data = get_binance_futures_klines_15m(symbol)
-        elif tf == "30m":
-            data = get_binance_futures_klines_30m(symbol)
-        else:
-            data = get_binance_futures_klines_1h(symbol)
-
+        fetchers = {
+            "5m": get_binance_futures_klines_5m,
+            "15m": get_binance_futures_klines_15m,
+            "30m": get_binance_futures_klines_30m,
+            "1h": get_binance_futures_klines_1h,
+        }
+        data = fetchers[tf](symbol)
         if isinstance(data, list) and len(data) > 20:
             return data
-    except Exception as e:
-        print(f"⚠️ Binance failed {symbol} {tf}: {e}")
+    except:
+        pass
 
     try:
-        if tf == "5m":
-            data = get_mexc_futures_klines_5m(symbol)
-        elif tf == "15m":
-            data = get_mexc_futures_klines_15m(symbol)
-        elif tf == "30m":
-            data = get_mexc_futures_klines_30m(symbol)
-        else:
-            data = get_mexc_futures_klines_1h(symbol)
-
+        fetchers = {
+            "5m": get_mexc_futures_klines_5m,
+            "15m": get_mexc_futures_klines_15m,
+            "30m": get_mexc_futures_klines_30m,
+            "1h": get_mexc_futures_klines_1h,
+        }
+        data = fetchers[tf](symbol)
         if isinstance(data, list) and len(data) > 20:
             return data
-    except Exception as e:
-        print(f"⚠️ MEXC failed {symbol} {tf}: {e}")
+    except:
+        pass
 
     return None
 
@@ -75,21 +81,17 @@ def futures_klines(symbol, tf):
 
 def normalize(raw):
     candles = []
-
     if not isinstance(raw, list):
         return None
 
     for c in raw:
         try:
-            if None in c[:6]:
-                continue
-
             candles.append({
-                "open": float(c[1]),
-                "high": float(c[2]),
-                "low": float(c[3]),
-                "close": float(c[4]),
-                "volume": float(c[5]),
+                "open": safe_float(c[1]),
+                "high": safe_float(c[2]),
+                "low": safe_float(c[3]),
+                "close": safe_float(c[4]),
+                "volume": safe_float(c[5]),
             })
         except:
             continue
@@ -109,16 +111,15 @@ def calculate_signal_score(signal):
     return min(score, 100)
 
 # ==============================
-# MARKET CONTEXT (SAFE)
+# MARKET CONTEXT (ULTRA SAFE)
 # ==============================
 
 def calculate_market_context(symbol):
     try:
-        news = max(get_news_score(symbol, 3) or 0, 0)
-        cmc = max(get_coinmarketcap_score(symbol, 3) or 0, 0)
-        whales = max(get_whales_score(symbol, 3) or 0, 0)
-    except Exception as e:
-        print(f"⚠️ Context failed {symbol}: {e}")
+        news = safe_float(get_news_score(symbol, 3))
+        cmc = safe_float(get_coinmarketcap_score(symbol, 3))
+        whales = safe_float(get_whales_score(symbol, 3))
+    except:
         return {"score": 0, "status": "DISABLED", "details": {}}
 
     total = news + cmc + whales
@@ -163,7 +164,6 @@ def run_bot():
     for market in watchlist:
         symbol = market.get("symbol")
         source = market.get("liquidity", "MARKET")
-
         if not symbol:
             continue
 
@@ -176,11 +176,7 @@ def run_bot():
             if not all([r5, r15, r30, r1h]):
                 continue
 
-            c5 = normalize(r5)
-            c15 = normalize(r15)
-            c30 = normalize(r30)
-            c1h = normalize(r1h)
-
+            c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
             if not all([c5, c15, c30, c1h]):
                 continue
 
@@ -188,12 +184,11 @@ def run_bot():
             if not signal:
                 continue
 
-            context = calculate_market_context(symbol)
             score = calculate_signal_score(signal)
-
             if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
                 continue
 
+            context = calculate_market_context(symbol)
             LAST_SIGNAL_SCORE[symbol] = score
             trade_type = classify_trade(context["score"])
 
