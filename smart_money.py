@@ -1,11 +1,11 @@
 # smart_money.py
 # ===============================
-# SMART MONEY CORE (v1.5)
-# - Structure: CHoCH + BOS
-# - Order Block detection
-# - Multi-TP support (TP1 / TP2 / TP3)
-# - TP3 = Liquidity + HTF
-# - Backward compatible with "target"
+# SMART MONEY CORE (v1.6)
+# - CHoCH + BOS
+# - Order Block
+# - Multi TP (TP1 / TP2 / TP3)
+# - TP3 = Liquidity + HTF (validated)
+# - Safe guards added
 # ===============================
 
 
@@ -65,75 +65,79 @@ def find_order_block(candles, direction):
 
 
 # ===============================
-# SMART LEVELS
+# SMART TARGETS
 # ===============================
 
 def find_liquidity_level(candles, direction):
-    """
-    Liquidity = obvious highs / lows
-    """
-    if direction == "BUY":
-        return max(c["high"] for c in candles)
-    else:
-        return min(c["low"] for c in candles)
+    if not candles:
+        return None
+
+    try:
+        return max(c["high"] for c in candles) if direction == "BUY" else min(c["low"] for c in candles)
+    except:
+        return None
 
 
 def find_htf_level(candles, direction):
-    """
-    HTF structure target
-    """
-    if direction == "BUY":
-        return max(c["high"] for c in candles)
-    else:
-        return min(c["low"] for c in candles)
+    if not candles:
+        return None
+
+    try:
+        return max(c["high"] for c in candles) if direction == "BUY" else min(c["low"] for c in candles)
+    except:
+        return None
 
 
 def build_trade(ob, direction, candles_30m, candles_1h):
-    """
-    TP1 = 1R
-    TP2 = 2R
-    TP3 = Liquidity + HTF (smart target)
-    """
-
     entry = (ob["high"] + ob["low"]) / 2
 
     if direction == "BUY":
         stop = ob["low"]
         risk = entry - stop
-
-        tp1 = entry + risk
-        tp2 = entry + risk * 2
     else:
         stop = ob["high"]
         risk = stop - entry
 
+    # حماية من risk صفر
+    if risk <= 0:
+        return None
+
+    if direction == "BUY":
+        tp1 = entry + risk
+        tp2 = entry + risk * 2
+    else:
         tp1 = entry - risk
         tp2 = entry - risk * 2
 
-    # Smart TP3
+    # TP3 ذكي
     liquidity_tp = find_liquidity_level(candles_30m, direction)
     htf_tp = find_htf_level(candles_1h, direction)
 
-    tp3 = max(liquidity_tp, htf_tp) if direction == "BUY" else min(liquidity_tp, htf_tp)
+    smart_tp3 = None
+    if liquidity_tp and htf_tp:
+        smart_tp3 = max(liquidity_tp, htf_tp) if direction == "BUY" else min(liquidity_tp, htf_tp)
+    else:
+        smart_tp3 = tp2 + risk if direction == "BUY" else tp2 - risk
+
+    # تأكيد أن TP3 منطقي
+    if direction == "BUY" and smart_tp3 <= tp2:
+        smart_tp3 = tp2 + risk
+    if direction == "SELL" and smart_tp3 >= tp2:
+        smart_tp3 = tp2 - risk
 
     return {
         "entry": round(entry, 6),
         "stop": round(stop, 6),
-
         "tp1": round(tp1, 6),
         "tp2": round(tp2, 6),
-        "tp3": round(tp3, 6),
-
-        # backward compatibility
+        "tp3": round(smart_tp3, 6),
         "target": round(tp2, 6),
-
         "rr": "1:3",
     }
 
 
 def smart_money_signal(symbol, candles_5m, candles_15m, candles_30m, candles_1h):
 
-    # HTF bias
     choch_30m = detect_choch(candles_30m)
     bos_15m = detect_bos(candles_15m)
 
@@ -143,28 +147,25 @@ def smart_money_signal(symbol, candles_5m, candles_15m, candles_30m, candles_1h)
     if choch_30m != bos_15m:
         return None
 
-    # LTF Order Block
     ob = find_order_block(candles_5m, bos_15m)
     if not ob:
         return None
 
     direction = "BUY" if bos_15m == "BULLISH" else "SELL"
+
     trade = build_trade(ob, direction, candles_30m, candles_1h)
+    if not trade:
+        return None
 
     return {
         "symbol": symbol,
         "direction": direction,
-
-        # Trade levels
         "entry": trade["entry"],
         "stop": trade["stop"],
-        "target": trade["target"],  # backward compatible
-
+        "target": trade["target"],
         "tp1": trade["tp1"],
         "tp2": trade["tp2"],
         "tp3": trade["tp3"],
-
-        # Meta
         "rr": trade["rr"],
         "model": "SMC",
         "confidence": 1.0,
