@@ -1,6 +1,6 @@
 # smart_money.py
 # ===============================
-# SMART MONEY CORE (v1.6 FIXED)
+# SMART MONEY CORE (v1.5 + DEBUG)
 # ===============================
 
 def detect_bos(candles):
@@ -22,20 +22,21 @@ def detect_choch(candles):
     if len(candles) < 4:
         return None
 
-    h1, l1 = candles[-4]["high"], candles[-4]["low"]
-    h2, l2 = candles[-2]["high"], candles[-2]["low"]
+    high1 = candles[-4]["high"]
+    low1 = candles[-4]["low"]
+    high2 = candles[-2]["high"]
+    low2 = candles[-2]["low"]
 
-    if h2 > h1 and l2 > l1:
+    if high2 > high1 and low2 > low1:
         return "BULLISH"
-    if h2 < h1 and l2 < l1:
+    if high2 < high1 and low2 < low1:
         return "BEARISH"
 
     return None
 
 
 def find_order_block(candles, direction):
-    # نبحث عن آخر شمعة معاكسة قبل الحركة
-    for i in range(len(candles) - 3, 1, -1):
+    for i in range(len(candles) - 2, 0, -1):
         c = candles[i]
 
         if direction == "BULLISH" and c["close"] < c["open"]:
@@ -44,9 +45,7 @@ def find_order_block(candles, direction):
         if direction == "BEARISH" and c["close"] > c["open"]:
             return {"high": c["high"], "low": c["low"]}
 
-    # fallback: آخر نطاق
-    last = candles[-2]
-    return {"high": last["high"], "low": last["low"]}
+    return None
 
 
 def build_trade(ob, direction, candles_30m, candles_1h):
@@ -57,16 +56,17 @@ def build_trade(ob, direction, candles_30m, candles_1h):
         risk = entry - stop
         tp1 = entry + risk
         tp2 = entry + risk * 2
-        tp3 = max(c["high"] for c in candles_1h)
     else:
         stop = ob["high"]
         risk = stop - entry
         tp1 = entry - risk
         tp2 = entry - risk * 2
-        tp3 = min(c["low"] for c in candles_1h)
 
-    if risk <= 0:
-        return None
+    tp3 = (
+        max(c["high"] for c in candles_1h)
+        if direction == "BUY"
+        else min(c["low"] for c in candles_1h)
+    )
 
     return {
         "entry": round(entry, 6),
@@ -75,33 +75,46 @@ def build_trade(ob, direction, candles_30m, candles_1h):
         "tp2": round(tp2, 6),
         "tp3": round(tp3, 6),
         "target": round(tp2, 6),
-        "rr": "1:2+",
+        "rr": "1:3",
     }
 
 
 def smart_money_signal(symbol, candles_5m, candles_15m, candles_30m, candles_1h):
 
-    bos = detect_bos(candles_15m)
-    choch = detect_choch(candles_30m)
+    choch_30m = detect_choch(candles_30m)
+    bos_15m = detect_bos(candles_15m)
 
-    # سماح ذكي
-    direction_bias = bos or choch
-    if not direction_bias:
+    if not choch_30m:
+        print(f"[SMC DEBUG] {symbol} ❌ NO CHoCH 30m")
         return None
 
-    direction = "BUY" if direction_bias == "BULLISH" else "SELL"
+    if not bos_15m:
+        print(f"[SMC DEBUG] {symbol} ❌ NO BOS 15m")
+        return None
 
-    ob = find_order_block(candles_5m, direction_bias)
+    if choch_30m != bos_15m:
+        print(f"[SMC DEBUG] {symbol} ❌ CHoCH/BOS mismatch")
+        return None
+
+    ob = find_order_block(candles_5m, bos_15m)
     if not ob:
+        print(f"[SMC DEBUG] {symbol} ❌ NO Order Block 5m")
         return None
 
+    direction = "BUY" if bos_15m == "BULLISH" else "SELL"
     trade = build_trade(ob, direction, candles_30m, candles_1h)
-    if not trade:
-        return None
+
+    print(f"[SMC DEBUG] {symbol} ✅ VALID SETUP")
 
     return {
         "symbol": symbol,
         "direction": direction,
-        **trade,
+        "entry": trade["entry"],
+        "stop": trade["stop"],
+        "tp1": trade["tp1"],
+        "tp2": trade["tp2"],
+        "tp3": trade["tp3"],
+        "target": trade["target"],
+        "rr": trade["rr"],
         "model": "SMC",
-        "confidence": 0.85,
+    }
