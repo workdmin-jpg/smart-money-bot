@@ -23,8 +23,12 @@ from exchanges.mexc_futures import (
 # SETTINGS
 # ==============================
 
-TEST_MODE = True
+TEST_MODE = False        # اجعله True فقط للاختبار
 MIN_SIGNAL_STEP = 0
+
+# ==============================
+# MEMORY
+# ==============================
 
 LAST_SIGNAL_SCORE = {}
 
@@ -36,35 +40,38 @@ def safe_float(v):
     try:
         return float(v)
     except:
-        return None
+        return 0.0
 
 # ==============================
-# DATA FETCH
+# FUTURES FETCH
 # ==============================
 
 def futures_klines(symbol, tf):
-    for source in ("binance", "mexc"):
-        try:
-            fetch = {
-                "binance": {
-                    "5m": get_binance_futures_klines_5m,
-                    "15m": get_binance_futures_klines_15m,
-                    "30m": get_binance_futures_klines_30m,
-                    "1h": get_binance_futures_klines_1h,
-                },
-                "mexc": {
-                    "5m": get_mexc_futures_klines_5m,
-                    "15m": get_mexc_futures_klines_15m,
-                    "30m": get_mexc_futures_klines_30m,
-                    "1h": get_mexc_futures_klines_1h,
-                },
-            }[source][tf]
+    try:
+        binance = {
+            "5m": get_binance_futures_klines_5m,
+            "15m": get_binance_futures_klines_15m,
+            "30m": get_binance_futures_klines_30m,
+            "1h": get_binance_futures_klines_1h,
+        }
+        data = binance[tf](symbol)
+        if isinstance(data, list) and len(data) >= 50:
+            return data
+    except Exception as e:
+        print(f"⚠️ Binance failed {symbol} {tf}: {e}")
 
-            data = fetch(symbol)
-            if isinstance(data, list) and len(data) >= 20:
-                return data
-        except:
-            continue
+    try:
+        mexc = {
+            "5m": get_mexc_futures_klines_5m,
+            "15m": get_mexc_futures_klines_15m,
+            "30m": get_mexc_futures_klines_30m,
+            "1h": get_mexc_futures_klines_1h,
+        }
+        data = mexc[tf](symbol)
+        if isinstance(data, list) and len(data) >= 50:
+            return data
+    except Exception as e:
+        print(f"⚠️ MEXC failed {symbol} {tf}: {e}")
 
     return None
 
@@ -78,19 +85,18 @@ def normalize(raw):
         return None
 
     for c in raw:
-        o, h, l, cl, v = map(safe_float, c[1:6])
-        if None in (o, h, l, cl, v):
+        try:
+            candles.append({
+                "open": safe_float(c[1]),
+                "high": safe_float(c[2]),
+                "low": safe_float(c[3]),
+                "close": safe_float(c[4]),
+                "volume": safe_float(c[5]),
+            })
+        except:
             continue
 
-        candles.append({
-            "open": o,
-            "high": h,
-            "low": l,
-            "close": cl,
-            "volume": v,
-        })
-
-    return candles if len(candles) >= 20 else None
+    return candles if len(candles) >= 30 else None
 
 # ==============================
 # SCORE
@@ -99,7 +105,7 @@ def normalize(raw):
 def calculate_signal_score(signal):
     score = 50
     if signal.get("rr"):
-        score += 10
+        score += 20
     if signal.get("model"):
         score += 10
     return min(score, 100)
@@ -121,36 +127,14 @@ def run_bot():
         if not symbol:
             continue
 
-        r5 = futures_klines(symbol, "5m")
-        r15 = futures_klines(symbol, "15m")
-        r30 = futures_klines(symbol, "30m")
-        r1h = futures_klines(symbol, "1h")
+        try:
+            r5  = futures_klines(symbol, "5m")
+            r15 = futures_klines(symbol, "15m")
+            r30 = futures_klines(symbol, "30m")
+            r1h = futures_klines(symbol, "1h")
 
-        if not all([r5, r15, r30, r1h]):
-            continue
+            if not all([r5, r15, r30, r1h]):
+                continue
 
-        c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
-        if not all([c5, c15, c30, c1h]):
-            continue
-
-        signal = smart_money_signal(symbol, c5, c15, c30, c1h)
-
-        if not signal and TEST_MODE:
-            last = c5[-1]["close"]
-            signal = {
-                "direction": "LONG",
-                "entry": last,
-                "stop": last * 0.99,
-                "tp1": last * 1.01,
-                "tp2": last * 1.02,
-                "tp3": last * 1.03,
-                "rr": "TEST",
-                "model": "TEST_MODE",
-            }
-
-        if not signal:
-            continue
-
-        score = calculate_signal_score(signal)
-        if score < LAST_SIGNAL_SCORE.get(symbol, 0) + MIN_SIGNAL_STEP:
-            continue
+            c5, c15, c30, c1h = map(normalize, [r5, r15, r30, r1h])
+            if not all([
