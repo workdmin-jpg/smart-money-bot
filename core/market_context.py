@@ -1,42 +1,45 @@
 # core/market_context.py
 # ===============================
-# SAFE MARKET CONTEXT (NO APIs)
+# Unified Market Context Engine (SAFE MODE)
 # ===============================
 
-def calculate_market_context(candles_1h, direction):
-    if not candles_1h or len(candles_1h) < 20:
-        return {
-            "score": 0,
-            "status": "NO_DATA",
-            "details": {}
-        }
+from context.cmc import get_coinmarketcap_score
+from context.news import get_news_score
+from context.whales import get_whales_score
 
-    volumes = [c["volume"] for c in candles_1h[-20:]]
-    closes = [c["close"] for c in candles_1h[-20:]]
 
-    avg_volume = sum(volumes) / len(volumes)
-    last_volume = volumes[-1]
+def safe_score(func, symbol, days):
+    try:
+        value = func(symbol, days)
+        if value is None:
+            return 0
+        return float(value)
+    except:
+        return 0
 
-    # =========================
-    # VOLUME SCORE (0–40)
-    # =========================
-    volume_score = 0
-    if last_volume > avg_volume * 1.5:
-        volume_score = 40
-    elif last_volume > avg_volume:
-        volume_score = 25
-    elif last_volume > avg_volume * 0.7:
-        volume_score = 10
 
-    # =========================
-    # VOLATILITY SCORE (0–30)
-    # =========================
-    ranges = [
-        candles_1h[i]["high"] - candles_1h[i]["low"]
-        for i in range(-10, -1)
-    ]
-    avg_range = sum(ranges) / len(ranges)
-    last_range = candles_1h[-1]["high"] - candles_1h[-1]["low"]
+def calculate_market_context(symbol, days=3):
+    news = safe_score(get_news_score, symbol, days)
+    cmc = safe_score(get_coinmarketcap_score, symbol, days)
+    whales = safe_score(get_whales_score, symbol, days)
 
-    volatility_score = 0
-    if last_range > avg_range * 1.5:
+    total = news + cmc + whales
+
+    if total >= 70:
+        status = "STRONG_MARKET_INTEREST"
+    elif total >= 40:
+        status = "MODERATE_MARKET_INTEREST"
+    elif total > 0:
+        status = "WEAK_MARKET_INTEREST"
+    else:
+        status = "NO_CONTEXT_SIGNAL"
+
+    return {
+        "score": int(total),
+        "status": status,
+        "details": {
+            "news": int(news),
+            "cmc": int(cmc),
+            "whales": int(whales),
+        },
+    }
