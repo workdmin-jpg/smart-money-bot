@@ -6,12 +6,6 @@ from smart_money import smart_money_signal
 from telegram_alerts import send_telegram_message
 
 
-from core.market_context import (
-    get_news_score,
-    get_coinmarketcap_score,
-    get_whales_score,
-)
-
 from exchanges.binance_futures import (
     get_binance_futures_klines_5m,
     get_binance_futures_klines_15m,
@@ -224,5 +218,6 @@ if __name__ == "__main__":
     while True:
         run_bot()
         time.sleep(300)
+
 
 
